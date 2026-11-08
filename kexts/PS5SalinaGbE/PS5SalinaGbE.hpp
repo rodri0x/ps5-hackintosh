@@ -4,6 +4,11 @@
  * Register layout, descriptor format and PHY bring-up follow the Linux "mts" driver for the PS5 (ps5-linux-patches), which in turn
  * is based on the MediaTek Star Ethernet MAC. Receive and transmit are polled: the stage that boots macOS leaves MSI off.
  */
+
+// Port of the "mts" Ethernet driver from ps5-linux-patches
+// (MODULE_AUTHOR: Armandas Kvietkus), itself based on mtk_star_emac.
+
+
 #ifndef PS5_SALINA_GBE_HPP
 #define PS5_SALINA_GBE_HPP
 
