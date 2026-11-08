@@ -187,6 +187,7 @@ I am moving on to other things, so here is what is open, in the order I would pi
 - **Acidanthera** (OpenCore, Lilu, VirtualSMC, RestrictEvents) and **AMD-OSX / AMD_Vanilla** (the base AMD kernel patches).
 - **EDK2** / TianoCore.
 - **The Linux `amdgpu` driver**: my reference for how this GPU actually behaves.
+- - **Armandas Kvietkus** and the [ps5-linux-patches](https://github.com/ps5-linux/ps5-linux-patches) contributors: the Linux `mts` Ethernet driver that `kexts/PS5SalinaGbE` is ported from.
 - Everyone who ever posted a register dump on a forum.
 
 ## License
