@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // See PS5SalinaGbE.hpp. PHY sequences and ring handling are a port of the Linux "mts" driver (mts_main.c, mts_phy.c).
+
+// Port of the "mts" Ethernet driver from ps5-linux-patches
+// (MODULE_AUTHOR: Armandas Kvietkus), itself based on mtk_star_emac.
+
 #include "PS5SalinaGbE.hpp"
 
 #define super IOEthernetController
