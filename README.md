@@ -3,6 +3,8 @@
 > I put **macOS Monterey** on a **PlayStation 5**. Not in a VM. Not streamed. Not "technically." The Apple kernel is running on the console's Zen 2 cores and drawing the desktop on the TV.
 > Sony was not consulted.
 
+** ** 
+
 ![macOS Monterey 12.7.6 on the PS5: a Terminal running fastfetch next to About This Mac](docs/desktop.png)
 
 *The desktop on the console, photographed off the TV. The text over it is my own debug console, drawn on the screen by the kernel; the user name, local address and serial number are blurred. 14 GB is the memory size I declare to macOS (see* Known issues*), and the CPU name and 1 GHz are what OpenCore and AMD's firmware tell it, not what runs.*
