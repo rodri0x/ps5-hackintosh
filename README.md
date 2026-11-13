@@ -33,7 +33,7 @@
 | 📶 Wi-Fi / 🔵 BT | ❌ | NXP IW620 combo chip. No driver on this planet for macOS. USB dongles are your friends |
 | 🔊 Audio | ❌ | HDMI audio needs a real AMD framebuffer driver. USB DAC / headset works in principle |
 | 🎮 GPU acceleration | ❌ | RDNA 1 "Cyan Skillfish". There's a Metal project for the sibling BC-250 board; see [Roadmap](#-roadmap) |
-| 🔌 Shutdown / restart | ⚠️ | You get to power-cycle it yourself, like it's 1998 |
+| 🔌 Shutdown / restart | ⚠️ | You get to power-cycle it yourself, like it's 1998. Experimental fix, not yet tried on the console: `kexts/PS5Power` (INSTALL.md) |
 | 💿 Internal SSD | 🚫 | **Blocked on purpose.** macOS never touches it. See [Safety](#-safety-please-read) |
 
 ---
@@ -98,6 +98,7 @@ All of these are OpenCore `Kernel > Patch` entries, built by `tools/make_baremet
 |---|---|
 | `tools/make_ierfix.py` | On every CPU: open AMD's APIC IER vectors and stop the performance counters Linux left running |
 | `tools/make_tscfix.py` | TSC 1596.3 MHz, bus = TSC/64 (the real LAPIC timer is ~25 MHz) |
+| `kexts/PS5Power` | Shut Down / Restart: the ICC power message Linux sends to Sony's power controller (glue function 104d:9107), at the end of a macOS shutdown. Experimental, off by default. GPL-2.0 (ported from the ps5-linux patches) |
 | `kexts/PS5SalinaGbE` | Ethernet: PCI 104d:9104, real BARs through the ARI proxy window, DMA pool in Linux's RAM, polled datapath. GPL-2.0 (derived from the Linux driver) |
 | `tools/make_cachefix.py` | Zen 2 cores/caches for XNU, one pset per CCX instead of per thread |
 | topology divisions | `_cpu_thread_alloc` otherwise divides by zero on AMD |
@@ -192,7 +193,7 @@ I am moving on to other things, so here is what is open, in the order I would pi
 
 ## License
 
-MIT, see [LICENSE](LICENSE): use it, change it, ship it, I don't mind what you do with it. The one exception is `kexts/PS5SalinaGbE`, which is GPL-2.0-only because it is a port of the Linux Ethernet driver for the PS5 (license text next to it). Third-party software (OpenCore, EDK2, Lilu, VirtualSMC, ps5-linux-loader...) is downloaded by the scripts, not included, and keeps its own license.
+MIT, see [LICENSE](LICENSE): use it, change it, ship it, I don't mind what you do with it. The exceptions are `kexts/PS5SalinaGbE`, which is GPL-2.0-only because it is a port of the Linux Ethernet driver for the PS5, and `kexts/PS5Power`, GPL-2.0-only because it ports the ps5-linux power-off code (license text next to each). Third-party software (OpenCore, EDK2, Lilu, VirtualSMC, ps5-linux-loader...) is downloaded by the scripts, not included, and keeps its own license.
 
 ---
 

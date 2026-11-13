@@ -207,5 +207,16 @@ You have no serial port, so the screen and the files are the instrument.
 ## Afterwards
 
 - With the Ethernet kext, the console takes a DHCP lease and answers ping and ssh (if you enabled Remote Login in step 2).
-- There is no shutdown or restart: power-cycle the console, and the next boot is a new jailbreak.
+- There is no shutdown or restart: power-cycle the console, and the next boot is a new jailbreak. An experimental fix, not yet tried on a
+  console, is `kexts/PS5Power`: it sends the power message PS5 Linux sends (`icc_power_shutdown` / `icc_power_reboot`) once macOS has
+  unmounted its disks. Restart brings the console back to the PS5 system software, so macOS still needs a new jailbreak after it.
+  Try it in two steps, with the kernel log on the screen:
+  ```
+  KEXT=PS5Power tools/build_kext.sh
+  PS5POWER=1 PS5POWER_DRY=1 tools/ktty_run.sh     # DryRun: at Shut Down it logs the messages and sends nothing
+  PS5POWER=1 tools/clean_run.sh                   # then for real: Shut Down should switch the console off
+  ```
+  In the DryRun boot, look for `PS5Power: glue requester id ..., real BAR2 ..., BAR4 ...` and `ready`, and at Shut Down for
+  `PS5Power: shut down: asking the console to power off` followed by the ICC query lines. If the console stays on after the real
+  one, power-cycle it as before and keep the screen photo.
 - Do not update macOS. An update replaces the kernel the patches in `tools/make_*.py` are matched to.

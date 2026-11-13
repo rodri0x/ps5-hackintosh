@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleExecutable</key>
+	<string>PS5Power</string>
+	<key>CFBundleIdentifier</key>
+	<string>local.ps5.driver.PS5Power</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>PS5Power</string>
+	<key>CFBundlePackageType</key>
+	<string>KEXT</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.1</string>
+	<key>CFBundleVersion</key>
+	<string>0.1</string>
+	<key>IOKitPersonalities</key>
+	<dict>
+		<key>PS5Power</key>
+		<dict>
+			<key>CFBundleIdentifier</key>
+			<string>local.ps5.driver.PS5Power</string>
+			<key>DryRun</key>
+			<false/>
+			<key>Enabled</key>
+			<true/>
+			<key>IOClass</key>
+			<string>PS5Power</string>
+			<key>IOMatchCategory</key>
+			<string>PS5Power</string>
+			<key>IOPCIMatch</key>
+			<string>0x9107104d</string>
+			<key>IOProbeScore</key>
+			<integer>1</integer>
+			<key>IOProviderClass</key>
+			<string>IOPCIDevice</string>
+		</dict>
+	</dict>
+	<key>OSBundleLibraries</key>
+	<dict>
+		<key>com.apple.iokit.IOPCIFamily</key>
+		<string>2.9</string>
+		<key>com.apple.kpi.bsd</key>
+		<string>8.0.0</string>
+		<key>com.apple.kpi.iokit</key>
+		<string>8.0.0</string>
+		<key>com.apple.kpi.libkern</key>
+		<string>8.0.0</string>
+		<key>com.apple.kpi.mach</key>
+		<string>8.0.0</string>
+		<key>com.apple.kpi.unsupported</key>
+		<string>8.0.0</string>
+	</dict>
+</dict>
+</plist>

@@ -87,6 +87,19 @@ if _watch.exists() and os.environ.get("BUS20WATCH") == "1":
             _w["IOKitPersonalities"]["PS5Bus20Watch"]["DmaScanBelow"] = int(os.environ["BUS20_SCANBELOW"], 0)
         plistlib.dump(_w, open(_wp, "wb"))
     cfg["Kernel"]["Add"].append(kext_entry("PS5Bus20Watch.kext"))
+# PS5POWER=1 adds Shut Down / Restart through Sony's power controller (KEXT=PS5Power tools/build_kext.sh); PS5POWER_DRY=1 builds it in
+# DryRun mode, which logs what it would send at shutdown and sends nothing (the first boot to try it with)
+_power = ROOT / "build/kexts/PS5Power.kext"
+if os.environ.get("PS5POWER") == "1" and not _power.exists():
+    sys.exit(f"PS5POWER=1 but {_power} is not built: KEXT=PS5Power tools/build_kext.sh")
+if _power.exists() and os.environ.get("PS5POWER") == "1":
+    shutil.copytree(_power, OUT / "OC/Kexts/PS5Power.kext")
+    _pp = OUT / "OC/Kexts/PS5Power.kext/Contents/Info.plist"
+    _pl = plistlib.load(open(_pp, "rb"))
+    for _pers in _pl["IOKitPersonalities"].values():
+        _pers["DryRun"] = os.environ.get("PS5POWER_DRY") == "1"
+    plistlib.dump(_pl, open(_pp, "wb"))
+    cfg["Kernel"]["Add"].append(kext_entry("PS5Power.kext"))
 # PS5CYAN=1 adds the Lilu plugin that blocks Apple's AMD power management (tools/build_lilu_plugin.sh builds it); it must come after Lilu
 _cyan = ROOT / "build/kexts/PS5Cyan.kext"
 if _cyan.exists() and os.environ.get("PS5CYAN") == "1":
