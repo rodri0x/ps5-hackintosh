@@ -13,7 +13,7 @@ import re, struct, subprocess, tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-LLVM = "/opt/homebrew/opt/llvm@18/bin"
+from toolpaths import llvm_bin, nm_bin, require_kc     # LLVM_BIN / NM_BIN override the Homebrew and Xcode defaults
 KC = ROOT / "build/ext/kernel/BootKernelExtensions-monterey.kc"
 STUB_SYM = "_nfs4_getattr_rpc"
 BLOCK, BLOCK_LEN = 0x60F, 0x38           # offsets from _cpuid_wa_required: the fallback block, up to (not including) 'cmpl $0, debug flag'
@@ -25,7 +25,8 @@ CORES = 8
 
 
 def _symbols():
-    out = subprocess.run(["/usr/bin/nm", str(KC)], capture_output=True, text=True).stdout
+    require_kc(KC)
+    out = subprocess.run([nm_bin(), str(KC)], capture_output=True, text=True).stdout
     return {l.split()[2]: int(l.split()[0], 16) for l in out.splitlines() if len(l.split()) == 3 and re.fullmatch(r"[0-9a-f]{16}", l.split()[0])}
 
 
@@ -48,10 +49,10 @@ def build_stub(base, stub_va):
         defs[f"parts{i}"] = base + CACHE_PARTS + 4 * i
     with tempfile.TemporaryDirectory() as td:
         Path(f"{td}/s.S").write_text("\n".join(lines) + "\n")
-        subprocess.check_call([f"{LLVM}/clang", "-target", "x86_64-unknown-none-elf", "-c", f"{td}/s.S", "-o", f"{td}/s.o"])
-        subprocess.check_call([f"{LLVM}/ld.lld", "-nostdlib", "-static", f"-Ttext={stub_va:#x}", "-e", "stub",
+        subprocess.check_call([f"{llvm_bin()}/clang", "-target", "x86_64-unknown-none-elf", "-c", f"{td}/s.S", "-o", f"{td}/s.o"])
+        subprocess.check_call([f"{llvm_bin()}/ld.lld", "-nostdlib", "-static", f"-Ttext={stub_va:#x}", "-e", "stub",
                                *[f"--defsym={k}={v:#x}" for k, v in defs.items()], f"{td}/s.o", "-o", f"{td}/s.elf"])
-        subprocess.check_call([f"{LLVM}/llvm-objcopy", "-O", "binary", f"{td}/s.elf", f"{td}/s.bin"])
+        subprocess.check_call([f"{llvm_bin()}/llvm-objcopy", "-O", "binary", f"{td}/s.elf", f"{td}/s.bin"])
         return Path(f"{td}/s.bin").read_bytes()
 
 

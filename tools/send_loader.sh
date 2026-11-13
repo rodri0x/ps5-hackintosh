@@ -8,11 +8,15 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 : "${PS5_HOST:?set PS5_HOST in .env}" "${PS5_LINUX_HOST:?set PS5_LINUX_HOST in .env}"
 ELF="${1:-$ROOT/build/bin/ps5-linux-loader.elf}"
 [ -f "$ELF" ] || { echo "no loader ELF at $ELF (make loader)"; exit 1; }
-# -G 1: give up on a connect after one second (the default waits ~75 s per attempt on an unreachable host, which made the loop miss the open port)
-linux_up() { nc -z -G 1 -w 1 "$PS5_LINUX_HOST" 22 2>/dev/null; }
+# -G 1: give up on a connect after one second (the default waits ~75 s per attempt on an unreachable host, which made the loop miss the open port).
+# -G is the macOS nc option; Linux nc (OpenBSD or traditional) rejects it, and with the error hidden the loop would wait forever, so use it only
+# where it works (there -w 1 already bounds the connect).
+NC_T=(-G 1 -w 1)
+if nc -z -G 1 -w 1 127.0.0.1 9 2>&1 | grep -qiE "illegal|invalid|unrecognized|unknown|usage"; then NC_T=(-w 1); fi
+linux_up() { nc -z "${NC_T[@]}" "$PS5_LINUX_HOST" 22 2>/dev/null; }
 while true; do
     if linux_up; then echo "$(date +%T) Linux is up on $PS5_LINUX_HOST"; exit 0; fi
-    if nc -z -G 1 -w 1 "$PS5_HOST" 9021 2>/dev/null; then
+    if nc -z "${NC_T[@]}" "$PS5_HOST" 9021 2>/dev/null; then
         echo "$(date +%T) port 9021 is open on $PS5_HOST: sending $(basename "$ELF")"
         nc -w 20 "$PS5_HOST" 9021 < "$ELF"
         echo "$(date +%T) sent; the console goes to rest mode, wake it up (power button) when its light stops blinking"

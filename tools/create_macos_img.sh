@@ -8,16 +8,19 @@
 #
 # Uso: ./tools/create_macos_img.sh [version]
 #   Versiones: sonoma, ventura, monterey, sequoia
-#   Default: sonoma
+#   Default: monterey (the only one this project boots on the PS5: the kernel patches are matched to 12.7.6)
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 BUILD="$PROJECT_DIR/build"
-MACOS_DIR="$BUILD/macos-installer"
+MACOS_DIR_ROOT="$BUILD/macos-installer"
 
-VERSION="${1:-sonoma}"
+VERSION="${1:-monterey}"
+# one download folder and one recovery image per version, so a later run for another version can never reuse them
+MACOS_DIR="$MACOS_DIR_ROOT/$VERSION"
+RECOVERY_IMG="$BUILD/macOS-recovery-$VERSION.img"
 
 # Catalogs de Apple para cada versión
 declare -A BOARD_IDS=(
@@ -49,6 +52,10 @@ echo "  Versión: macOS $VERSION"
 echo ""
 
 mkdir -p "$MACOS_DIR"
+# Files from before the per-version names do not say which version they are: never use them, and say so
+for legacy in "$MACOS_DIR_ROOT/com.apple.recovery.boot" "$MACOS_DIR_ROOT/BaseSystem.dmg" "$BUILD/macOS-recovery.img"; do
+    if [ -e "$legacy" ]; then echo "  Aviso: $legacy es de una versión desconocida (nombre antiguo) y no se usa; bórralo cuando quieras"; fi
+done
 
 # ── Descargar macrecovery si no existe ────────────────
 MACRECOVERY="$BUILD/macrecovery/macrecovery.py"
@@ -89,7 +96,6 @@ else
 fi
 
 # ── Crear imagen del installer ────────────────────────
-RECOVERY_IMG="$BUILD/macOS-recovery.img"
 if [ ! -f "$RECOVERY_IMG" ]; then
     echo "[4/4] Creando imagen del recovery..."
     # Buscar el DMG descargado
@@ -108,6 +114,8 @@ if [ ! -f "$RECOVERY_IMG" ]; then
     # Convertir DMG comprimido a imagen raw (UDRW) que QEMU pueda leer
     if command -v hdiutil &>/dev/null; then
         hdiutil convert "$DMG_FILE" -format UDRW -o "$RECOVERY_IMG" 2>&1 | tail -3
+        # hdiutil adds .dmg to an output name that does not end in it
+        if [ ! -f "$RECOVERY_IMG" ] && [ -f "$RECOVERY_IMG.dmg" ]; then mv "$RECOVERY_IMG.dmg" "$RECOVERY_IMG"; fi
     else
         qemu-img convert -f dmg -O raw "$DMG_FILE" "$RECOVERY_IMG"
     fi
@@ -123,7 +131,7 @@ echo "  macOS.img (disco):    $MACOS_IMG ($(du -h "$MACOS_IMG" | cut -f1))"
 echo "  Recovery:             $RECOVERY_IMG ($(du -h "$RECOVERY_IMG" | cut -f1))"
 echo ""
 echo "Para instalar macOS en la imagen, ejecuta:"
-echo "  ./tools/install_macos_qemu.sh"
+echo "  ./tools/install_macos_qemu.sh $VERSION"
 echo ""
 echo "Esto lanza QEMU en tu Mac con OpenCore + recovery."
 echo "Sigue la instalación normal de macOS."

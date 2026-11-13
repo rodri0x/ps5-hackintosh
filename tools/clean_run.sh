@@ -15,14 +15,15 @@ CARVE_BASE=$(ssh "$PS5" cat /proc/iomem | python3 tools/carveout.py); export CAR
 echo "VRAM carve-out base $CARVE_BASE"
 [ -f opencore/ACPI/sony/APIC.bin ] || tools/dump_sony_acpi.sh      # the console's own MADT, dumped once from the running Linux
 QUIET=1 OC_DEBUG=1 python3 tools/make_baremetal_efi.py | head -1
-VMLINUZ=$(ls build/ext/vmlinuz-* 2>/dev/null | head -1)
-if [ -n "$VMLINUZ" ] && { [ ! -f build/bringup/chainV5.bzImage ] || [ bringup/stub.c -nt build/bringup/chainV5.bzImage ]; }; then bringup/build.sh "$VMLINUZ" >/dev/null; fi
-ELF=build/edk2/Build/UefiPayloadPkgX64/UniversalPayload.elf
-[ -f "$ELF" ] && python3 uefi/mkbundle.py "$ELF" build/ps5-upl.bundle >/dev/null
+# stage 1 (for the kernel the console runs now) and the bundle (for the carve-out base read above), rebuilt on every deploy: tools/stage1.sh
+source tools/stage1.sh
+build_stage1
 python3 tools/make_welcome.py build/welcome.raw >/dev/null
 (cd build/baremetal-efi && tar -cf ../baremetal-efi.tar EFI)
-scp -q build/baremetal-efi.tar build/ps5-upl.bundle build/bringup/chainV5.bzImage bringup/tools/patch_tripwire.py bringup/tools/run_stage.sh bringup/tools/kms_linear.py build/welcome.raw $PS5:/root/
-ssh $PS5 'rm -rf /boot/efi/EFI; tar -C /boot/efi -xf /root/baremetal-efi.tar 2>/dev/null; sync
+scp -q build/baremetal-efi.tar "${STAGE1_FILES[@]}" "$PS5:/root/"
+# install_efi.sh swaps the EFI folder only after the new one is extracted and checked, keeps the old one as /boot/efi/EFI.bak and puts it back
+# if the swap fails; on any failure nothing below runs
+ssh $PS5 'bash /root/install_efi.sh /root/baremetal-efi.tar /boot/efi || exit 1
 for p in $(pgrep -x qemu-system-x86); do kill -9 $p; done; systemctl stop hackintosh --no-block; sleep 3
 for p in $(pgrep -x stop_qemu.sh); do kill -9 $p; done
 nohup bash /root/run_stage.sh /root/chainV5.bzImage /root/ps5-upl.bundle > /root/run_stage.log 2>&1 &'

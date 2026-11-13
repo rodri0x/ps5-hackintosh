@@ -31,12 +31,20 @@ rm -rf "$OVL" && mkdir -p "$OVL/IOKit/network"
 python3 - "$KH/IOKit/network/IONetworkController.h" "$OVL/IOKit/network/IONetworkController.h" <<'PY'
 import sys
 s = open(sys.argv[1]).read()
-for old, new in (("    virtual mbuf_t allocatePacketNoWait(UInt32 size);\n", ""),
-                 ("OSMetaClassDeclareReservedUsed( IONetworkController,  6);", "OSMetaClassDeclareReservedUnused( IONetworkController,  6);"),
-                 ("    virtual IOReturn setHardwareAssists( UInt32 hardwareAssists, UInt32 hardwareAssistsMask )\n", ""),
-                 ("OSMetaClassDeclareReservedUsed( IONetworkController,  7);", "OSMetaClassDeclareReservedUnused( IONetworkController,  7);")):
-    assert s.count(old) == 1, old
-    s = s.replace(old, new)
+EDITS = (("    virtual mbuf_t allocatePacketNoWait(UInt32 size);\n", ""),
+         ("OSMetaClassDeclareReservedUsed( IONetworkController,  6);", "OSMetaClassDeclareReservedUnused( IONetworkController,  6);"),
+         ("    virtual IOReturn setHardwareAssists( UInt32 hardwareAssists, UInt32 hardwareAssistsMask )\n", ""),
+         ("OSMetaClassDeclareReservedUsed( IONetworkController,  7);", "OSMetaClassDeclareReservedUnused( IONetworkController,  7);"))
+# An older SDK already keeps both slots as padding (the Monterey layout): nothing to change. Otherwise every edit must match exactly once, or the
+# kext is built against the wrong vtable and OpenCore drops it without a word: stop loudly (an explicit check, not assert, which python -O skips).
+if not any(old in s for old, _ in EDITS) and all(f"OSMetaClassDeclareReservedUnused( IONetworkController,  {n});" in s for n in (6, 7)):
+    print("IONetworkController.h already keeps slots 6 and 7 as padding: using it as is", file=sys.stderr)
+else:
+    for old, new in EDITS:
+        if s.count(old) != 1:
+            sys.exit(f"IONetworkController.h of this SDK is not the expected one ({s.count(old)} matches for {old.strip()!r}): the header patch "
+                     "cannot be applied, and without it OpenCore silently drops the Ethernet kext. Check the SDK header by hand.")
+        s = s.replace(old, new)
 open(sys.argv[2], "w").write(s)
 PY
 rm -rf "$OUT" && mkdir -p "$OUT/Contents/MacOS"

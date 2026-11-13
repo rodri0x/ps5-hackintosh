@@ -1,0 +1,6 @@
+# Scripts run on macOS and on the console's Linux: keep LF even in a Windows clone (CRLF breaks #!/bin/bash and heredocs)
+* text=auto eol=lf
+*.png binary
+*.bin binary
+*.aml binary
+*.efi binary

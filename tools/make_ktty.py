@@ -10,13 +10,15 @@ import os, struct, subprocess, tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-LLVM = "/opt/homebrew/opt/llvm@18/bin"
+from toolpaths import llvm_bin, nm_bin, require_kc     # LLVM_BIN / NM_BIN override the Homebrew and Xcode defaults
 PLACEHOLDER = bytes.fromhex("0df0adde")          # 0xDEADF00D little endian
 
 
 def _symbols():
     # nm prints the kernel's symbols and then aborts on the first kext it cannot parse: keep what it printed
-    out = subprocess.run(["/usr/bin/nm", str(ROOT / "build/ext/kernel/BootKernelExtensions-monterey.kc")], capture_output=True, text=True).stdout
+    kc = ROOT / "build/ext/kernel/BootKernelExtensions-monterey.kc"
+    require_kc(kc)
+    out = subprocess.run([nm_bin(), str(kc)], capture_output=True, text=True).stdout
     return {l.split()[2]: int(l.split()[0], 16) for l in out.splitlines() if len(l.split()) == 3 and l.split()[1] in ("T", "t", "S", "D", "s", "d")}
 
 
@@ -38,7 +40,7 @@ LAPIC_VBASE = 0xffffff80012fc8a8        # the kernel variable holding the LAPIC'
 def build_blob():
     with tempfile.TemporaryDirectory() as td:
         obj, elf, binf = f"{td}/k.o", f"{td}/k.elf", f"{td}/k.bin"
-        subprocess.check_call([f"{LLVM}/clang", "-target", "x86_64-unknown-none-elf", "-ffreestanding", "-fno-stack-protector",
+        subprocess.check_call([f"{llvm_bin()}/clang", "-target", "x86_64-unknown-none-elf", "-ffreestanding", "-fno-stack-protector",
                                "-mno-red-zone", "-mno-sse", "-mno-mmx", "-mno-avx", "-fPIE", "-fno-builtin", "-Os",
                                "-fvisibility=hidden", f"-DKTTY_HALT_DELTA={halt_delta()}", f"-DKTTY_QUIET_UNITS={int(float(os.environ.get('KTTY_QUIET_AFTER', '60')) * 1596.3e6 / (1 << 20))}u", f"-DKTTY_LAPIC_DELTA={LAPIC_VBASE - _main_addr()}", f"-DKTTY_PESTATE_DELTA={_symbols()['_PE_state'] - _main_addr()}", f"-DKTTY_VINFO_DELTA={_symbols()['_vinfo'] - _main_addr()}"] + [f"-DKTTY_{n}_DELTA={_symbols()['_' + sym] - _main_addr()}" for n, sym in (("CPUPTR", "cpu_data_ptr"), ("PSETNODE", "pset_node0"), ("PSET0", "pset0"), ("PKGS", "x86_pkgs"))] + ([f'-DKTTY_RETURN_PAT="{os.environ["KTTY_RETURN"]}"'] if os.environ.get("KTTY_RETURN") else []) +
                               ([f'-DKTTY_DUMP_PAT="{os.environ["KTTY_DUMP"]}"'] if os.environ.get("KTTY_DUMP") else []) +
@@ -46,8 +48,8 @@ def build_blob():
                               ["-c", str(ROOT / "bringup/ktty/ktty.c"), "-o", obj])
         Path(f"{td}/l.ld").write_text("ENTRY(ktty_main)\nSECTIONS { . = 0; .text : { *(.text.entry) *(.text .text.*) } "
                                       ".rodata : { *(.rodata .rodata.*) } /DISCARD/ : { *(.comment) *(.note*) *(.eh_frame*) } }\n")
-        subprocess.check_call([f"{LLVM}/ld.lld", "-nostdlib", "-static", "-T", f"{td}/l.ld", obj, "-o", elf])
-        subprocess.check_call([f"{LLVM}/llvm-objcopy", "-O", "binary", elf, binf])
+        subprocess.check_call([f"{llvm_bin()}/ld.lld", "-nostdlib", "-static", "-T", f"{td}/l.ld", obj, "-o", elf])
+        subprocess.check_call([f"{llvm_bin()}/llvm-objcopy", "-O", "binary", elf, binf])
         main = Path(binf).read_bytes()
     assert len(main) <= BLOB_MAX, f"blob too big: {len(main)}"
     assert PLACEHOLDER in main

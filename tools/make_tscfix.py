@@ -12,7 +12,7 @@ import re, struct, subprocess, tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-LLVM = "/opt/homebrew/opt/llvm@18/bin"
+from toolpaths import llvm_bin, nm_bin, require_kc     # LLVM_BIN / NM_BIN override the Homebrew and Xcode defaults
 KC = ROOT / "build/ext/kernel/BootKernelExtensions-monterey.kc"
 STUB_SYM = "_nfs4_open_rpc_internal"
 EPILOGUE = bytes.fromhex("5b415c415d415e415f5dc3")        # pop rbx, r12-r15, rbp; ret (the end of tsc_init)
@@ -23,7 +23,8 @@ M64 = (1 << 64) - 1
 
 
 def _symbols():
-    out = subprocess.run(["/usr/bin/nm", str(KC)], capture_output=True, text=True).stdout
+    require_kc(KC)
+    out = subprocess.run([nm_bin(), str(KC)], capture_output=True, text=True).stdout
     return {l.split()[2]: int(l.split()[0], 16) for l in out.splitlines() if len(l.split()) == 3 and l.split()[1] in ("T", "t", "S", "D", "s", "d")}
 
 
@@ -54,10 +55,10 @@ def build_stub(stub_va):
     lines += ["    popq %rbx", "    popq %r12", "    popq %r13", "    popq %r14", "    popq %r15", "    popq %rbp", "    retq"]
     with tempfile.TemporaryDirectory() as td:
         Path(f"{td}/s.S").write_text("\n".join(lines) + "\n")
-        subprocess.check_call([f"{LLVM}/clang", "-target", "x86_64-unknown-none-elf", "-c", f"{td}/s.S", "-o", f"{td}/s.o"])
+        subprocess.check_call([f"{llvm_bin()}/clang", "-target", "x86_64-unknown-none-elf", "-c", f"{td}/s.S", "-o", f"{td}/s.o"])
         defs = [f"--defsym={n}={syms['_' + n]:#x}" for n in vals]
-        subprocess.check_call([f"{LLVM}/ld.lld", "-nostdlib", "-static", f"-Ttext={stub_va:#x}", "-e", "stub", *defs, f"{td}/s.o", "-o", f"{td}/s.elf"])
-        subprocess.check_call([f"{LLVM}/llvm-objcopy", "-O", "binary", f"{td}/s.elf", f"{td}/s.bin"])
+        subprocess.check_call([f"{llvm_bin()}/ld.lld", "-nostdlib", "-static", f"-Ttext={stub_va:#x}", "-e", "stub", *defs, f"{td}/s.o", "-o", f"{td}/s.elf"])
+        subprocess.check_call([f"{llvm_bin()}/llvm-objcopy", "-O", "binary", f"{td}/s.elf", f"{td}/s.bin"])
         return Path(f"{td}/s.bin").read_bytes()
 
 

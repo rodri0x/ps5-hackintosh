@@ -16,7 +16,9 @@ LOADER_DIR   := third_party/ps5-linux-loader
 INITRAMFS_D  := $(BUILD)/initramfs_root
 
 export PS5_PAYLOAD_SDK ?= $(HOME)/.local/ps5-payload-sdk
-export LLVM_CONFIG     ?= /opt/homebrew/opt/llvm@18/bin/llvm-config
+# LLVM_BIN wins; else Homebrew llvm@18 on Apple Silicon, then on Intel (same rules as tools/llvm.sh and tools/toolpaths.py)
+LLVM_BIN ?= $(firstword $(patsubst %/llvm-config,%,$(wildcard /opt/homebrew/opt/llvm@18/bin/llvm-config /usr/local/opt/llvm@18/bin/llvm-config)) /opt/homebrew/opt/llvm@18/bin)
+export LLVM_CONFIG     ?= $(LLVM_BIN)/llvm-config
 
 .PHONY: all clean loader initramfs rootfs usb deploy acpi
 

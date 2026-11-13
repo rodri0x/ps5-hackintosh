@@ -33,7 +33,7 @@ brew install llvm@18 docker qemu acpica
 pip3 install pillow
 ```
 
-`qemu` is only for step 2; `acpica` (`iasl`) compiles the ACPI sources. The scripts look for LLVM in `/opt/homebrew/opt/llvm@18/bin`; set `LLVM_BIN` if yours lives elsewhere.
+`qemu` is only for step 2; `acpica` (`iasl`) compiles the ACPI sources. The scripts look for LLVM in `/opt/homebrew/opt/llvm@18/bin` (or `/usr/local/opt/llvm@18/bin` on an Intel Mac); set `LLVM_BIN` if yours lives elsewhere, and `NM_BIN` for an nm other than `/usr/bin/nm`.
 
 - A copy of macOS Monterey. The patches are matched to 12.7.6 (XNU 21.6.0), the last Monterey. Other builds are untested.
 

@@ -190,7 +190,7 @@ if ebs.exists():
 if os.environ.get("TRIPWIRE"):
     import subprocess, tempfile
     sym, colour = os.environ["TRIPWIRE"].split("=")
-    llvm = os.environ.get("LLVM_BIN", "/opt/homebrew/opt/llvm@18/bin")
+    from toolpaths import llvm_bin; llvm = llvm_bin()
     with tempfile.TemporaryDirectory() as td:
         subprocess.check_call([f"{llvm}/clang", "-target", "i386-unknown-none-elf", "-c", f"-DCOLOUR=0x{colour}",
                                "-DVRAM_OFFSET=0x1a000000",
@@ -205,7 +205,7 @@ if os.environ.get("TRIPWIRE"):
 # comes back with all of macOS' RAM readable (tools/macos_log.py). KTTY_RETURN="text" does the same when the console prints it.
 if os.environ.get("RETURN") == "1":
     import subprocess, tempfile
-    llvm = os.environ.get("LLVM_BIN", "/opt/homebrew/opt/llvm@18/bin")
+    from toolpaths import llvm_bin; llvm = llvm_bin()
     with tempfile.TemporaryDirectory() as td:
         subprocess.check_call([f"{llvm}/clang", "-target", "x86_64-unknown-none-elf", "-I", str(ROOT / "bringup/retlinux"), "-c",
                                str(ROOT / "bringup/retlinux/retkern.S"), "-o", f"{td}/rk.o"])

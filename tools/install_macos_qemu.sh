@@ -5,7 +5,8 @@
 # Lanza QEMU con OpenCore + recovery para instalar macOS
 # en la imagen de disco. Esto se ejecuta en tu Mac, NO en PS5.
 #
-# Uso: ./tools/install_macos_qemu.sh
+# Uso: ./tools/install_macos_qemu.sh [version]      (default monterey; the recovery made by create_macos_img.sh for that version)
+#   NO_RECOVERY=1 boots the installed disk without a recovery image
 
 set -euo pipefail
 
@@ -14,7 +15,18 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 BUILD="$PROJECT_DIR/build"
 
 MACOS_IMG="$BUILD/macOS.img"
-RECOVERY_IMG="$BUILD/macOS-recovery.img"
+VERSION="${1:-monterey}"
+case "$VERSION" in
+    monterey|ventura|sonoma|sequoia) ;;
+    *) echo "Error: versión '$VERSION' no soportada. Opciones: monterey, ventura, sonoma, sequoia"; exit 1;;
+esac
+RECOVERY_IMG="$BUILD/macOS-recovery-$VERSION.img"
+# checked before anything is downloaded or launched: without it QEMU would start with no installer and no word about why
+if [ "${NO_RECOVERY:-0}" != 1 ] && [ ! -f "$RECOVERY_IMG" ]; then
+    echo "Error: no hay recovery de $VERSION ($RECOVERY_IMG). Ejecuta primero: ./tools/create_macos_img.sh $VERSION"
+    echo "  (NO_RECOVERY=1 arranca el disco ya instalado sin recovery)"
+    exit 1
+fi
 OC_QCOW2="$BUILD/OpenCore-OSX-KVM.qcow2"
 OVMF_CODE="$BUILD/OVMF_CODE.fd"
 OVMF_VARS="$BUILD/OVMF_VARS.fd"
@@ -30,7 +42,9 @@ echo ""
 # ── Descargar OpenCore para QEMU si no existe ─────────
 if [ ! -f "$OC_QCOW2" ]; then
     echo "  Descargando OpenCore (OSX-KVM) para QEMU..."
-    curl -L -o "$OC_QCOW2" "$OC_URL"
+    # -f + .part: an HTTP error page must not be kept as the qcow2 (the next run would take it as downloaded)
+    curl -fL -o "$OC_QCOW2.part" "$OC_URL" || { rm -f "$OC_QCOW2.part"; echo "Error: no se pudo descargar $OC_URL"; exit 1; }
+    mv "$OC_QCOW2.part" "$OC_QCOW2"
     echo "  OpenCore descargado: $(du -h "$OC_QCOW2" | cut -f1)"
 fi
 
@@ -100,8 +114,8 @@ QEMU_ARGS=(
     -device usb-tablet
 )
 
-# Añadir recovery si existe
-if [ -f "$RECOVERY_IMG" ]; then
+# Añadir recovery (siempre, salvo NO_RECOVERY=1; su existencia se comprobó arriba)
+if [ "${NO_RECOVERY:-0}" != 1 ]; then
     QEMU_ARGS+=(
         -drive "id=Recovery,if=none,format=raw,file=$RECOVERY_IMG"
         -device ide-hd,bus=sata.2,drive=Recovery

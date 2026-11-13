@@ -12,7 +12,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 OUT="$HERE/../build/bringup"
 VMLINUZ="${1:?usage: build.sh /path/to/vmlinuz}"
-L="${LLVM_BIN:-/opt/homebrew/opt/llvm@18/bin}"
+source "$HERE/../tools/llvm.sh"; L="$(llvm_bin)"
 mkdir -p "$OUT"
 
 CFLAGS="-target x86_64-unknown-none-elf -ffreestanding -fno-stack-protector -mno-red-zone -mno-sse -mno-mmx -mno-avx \
