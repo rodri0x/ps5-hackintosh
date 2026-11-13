@@ -79,6 +79,13 @@ if _probe.exists() and os.environ.get("GPUPROBE") == "1":
 _watch = ROOT / "build/kexts/PS5Bus20Watch.kext"
 if _watch.exists() and os.environ.get("BUS20WATCH") == "1":
     shutil.copytree(_watch, OUT / "OC/Kexts/PS5Bus20Watch.kext")
+    if os.environ.get("BUS20_DMATEST"):        # seconds after the kext starts; the DMA experiment costs the boot (see the kext's header)
+        _wp = OUT / "OC/Kexts/PS5Bus20Watch.kext/Contents/Info.plist"
+        _w = plistlib.load(open(_wp, "rb"))
+        _w["IOKitPersonalities"]["PS5Bus20Watch"]["DmaTest"] = int(os.environ["BUS20_DMATEST"])
+        if os.environ.get("BUS20_SCANBELOW"):
+            _w["IOKitPersonalities"]["PS5Bus20Watch"]["DmaScanBelow"] = int(os.environ["BUS20_SCANBELOW"], 0)
+        plistlib.dump(_w, open(_wp, "wb"))
     cfg["Kernel"]["Add"].append(kext_entry("PS5Bus20Watch.kext"))
 # PS5CYAN=1 adds the Lilu plugin that blocks Apple's AMD power management (tools/build_lilu_plugin.sh builds it); it must come after Lilu
 _cyan = ROOT / "build/kexts/PS5Cyan.kext"

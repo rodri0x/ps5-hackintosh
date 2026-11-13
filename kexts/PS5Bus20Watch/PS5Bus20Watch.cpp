@@ -6,6 +6,9 @@
 // PinLow (personality property, on by default): at start it also allocates and keeps every free page below 1 GiB, so nothing else can be placed in
 // the range 0x01000000-0x3fffffff that Linux marks reserved and that the console's own devices may not be able to DMA into (the DMA buffers of
 // macOS are handed out from the lowest free pages first). The kext never unloads, so the pages stay pinned.
+// DmaTest (personality number, seconds after start, 0 = off): the experiment that settles whether that range is the problem. It reads the first
+// 4 KiB of the boot disk into an ordinary buffer (the control) and then into pinned chunks spread over the low range, comparing the data. If the
+// disk's controller cannot DMA there, the read into a low chunk ends in the Host System Error on purpose: THE BOOT IS SACRIFICED.
 //   per device: PCI command/status, bridge secondary status and control, PCIe link/device control and status, PM control/status, AER status;
 //   xHCI: USBCMD, USBSTS (the event-interrupt bit masked), HCCPARAMS1, DCBAAP and the interrupter 0 ERST base.
 #include <IOKit/IOLib.h>
@@ -15,6 +18,8 @@
 #include <IOKit/IOBufferMemoryDescriptor.h>
 #include <IOKit/IOMemoryDescriptor.h>
 #include <IOKit/pci/IOPCIDevice.h>
+#include <IOKit/storage/IOMedia.h>
+#include <kern/thread.h>
 
 #define LOG(fmt, ...) IOLog("Bus20Watch: " fmt "\n", ##__VA_ARGS__)
 #define NDEV 4
@@ -35,7 +40,10 @@ class PS5Bus20Watch : public IOService {
     bool seen[NDEV] = {};
     uint32_t round = 0, lines = 0, found = 0, errLines = 0, seq = 0;
     OSArray *pinned = nullptr;
+    uint32_t dmaTestDelay = 0, dmaScanBelow = 0;
     void pinLow();
+    void dmaTest();
+    static void dmaTestThread(void *arg, wait_result_t);
 public:
     bool start(IOService *provider) override;
     void stop(IOService *provider) override;
@@ -54,12 +62,20 @@ bool PS5Bus20Watch::start(IOService *provider)
     LOG("started");
     OSBoolean *pin = OSDynamicCast(OSBoolean, getProperty("PinLow"));
     if (!pin || pin->isTrue()) pinLow();
+    OSNumber *dt = OSDynamicCast(OSNumber, getProperty("DmaTest"));
+    if (dt) dmaTestDelay = dt->unsigned32BitValue();
+    dt = OSDynamicCast(OSNumber, getProperty("DmaScanBelow"));       // fine scan: every pinned chunk below this address, highest first
+    if (dt) dmaScanBelow = dt->unsigned32BitValue();
     loop = IOWorkLoop::workLoop();
     if (!loop) return false;
     timer = IOTimerEventSource::timerEventSource(this, (IOTimerEventSource::Action)&PS5Bus20Watch::pollFired);
     if (!timer || loop->addEventSource(timer) != kIOReturnSuccess) return false;
     timer->setTimeoutMS(500);
     registerService();
+    if (dmaTestDelay && pinned && pinned->getCount()) {
+        thread_t th;
+        if (kernel_thread_start(&PS5Bus20Watch::dmaTestThread, this, &th) == KERN_SUCCESS) thread_deallocate(th);
+    }
     return true;
 }
 
@@ -82,6 +98,74 @@ void PS5Bus20Watch::pinLow()
         if (pa + 0x200000 > hi) hi = pa + 0x200000;
     }
     LOG("pinned %llu MiB below 1 GiB in %u chunks, lowest 0x%llx, highest end 0x%llx", (unsigned long long)(total >> 20), pinned->getCount(), (unsigned long long)(lo == ~0ULL ? 0 : lo), (unsigned long long)hi);
+}
+
+void PS5Bus20Watch::dmaTestThread(void *arg, wait_result_t)
+{
+    PS5Bus20Watch *self = (PS5Bus20Watch *)arg;
+    IOSleep(self->dmaTestDelay * 1000);
+    self->dmaTest();
+    thread_terminate(current_thread());
+}
+
+static uint64_t chunkPhys(IOBufferMemoryDescriptor *b)
+{
+    IOByteCount seg = 0;
+    return b->getPhysicalSegment(0, &seg, kIOMemoryMapperNone);
+}
+
+void PS5Bus20Watch::dmaTest()
+{
+    IOMedia *media = nullptr;
+    OSDictionary *m = IOService::serviceMatching("IOMedia");
+    OSIterator *it = m ? IOService::getMatchingServices(m) : nullptr;
+    if (m) m->release();
+    if (it) {
+        OSObject *o;
+        while ((o = it->getNextObject())) {
+            IOMedia *c = OSDynamicCast(IOMedia, o);
+            if (c && c->isWhole() && c->getSize() > (1ULL << 30)) { media = c; media->retain(); break; }
+        }
+        it->release();
+    }
+    if (!media) { LOG("DMATEST: no whole-disk IOMedia found"); return; }
+    LOG("DMATEST: disk '%s', %llu MiB, %u pinned chunks", media->getName(), (unsigned long long)(media->getSize() >> 20), pinned->getCount());
+    if (!media->open(this, 0, kIOStorageAccessReader)) { LOG("DMATEST: cannot open the disk for reading"); media->release(); return; }
+    const uint32_t len = 4096;
+    // control: an ordinary buffer, wherever macOS puts it
+    IOBufferMemoryDescriptor *ctl = IOBufferMemoryDescriptor::inTaskWithOptions(kernel_task, kIODirectionIn, len, 4096);
+    UInt64 actual = 0;
+    IOReturn r = ctl ? media->read(this, 0, ctl, nullptr, &actual) : kIOReturnNoMemory;
+    LOG("DMATEST: control read into phys 0x%llx: result 0x%x, %llu bytes", ctl ? (unsigned long long)chunkPhys(ctl) : 0ULL, r, (unsigned long long)actual);
+    if (r != kIOReturnSuccess || actual != len) { media->close(this); media->release(); if (ctl) ctl->release(); return; }
+    const uint8_t *want = (const uint8_t *)ctl->getBytesNoCopy();
+    // chunks spread over what was pinned, highest address first (nearest to the RAM Linux uses), 8 of them at most
+    uint32_t n = pinned->getCount(), step = dmaScanBelow ? 1 : (n > 8 ? n / 8 : 1);
+    for (int32_t i = (int32_t)n - 1; i >= 0; i -= (int32_t)step) {
+        IOBufferMemoryDescriptor *b = OSDynamicCast(IOBufferMemoryDescriptor, pinned->getObject((uint32_t)i));
+        if (!b) continue;
+        if (dmaScanBelow && chunkPhys(b) >= dmaScanBelow) continue;
+        uint8_t *va = (uint8_t *)b->getBytesNoCopy();
+        memset(va, 0xa5, len);
+        IOMemoryDescriptor *d = IOMemoryDescriptor::withAddressRange((mach_vm_address_t)va, len, kIODirectionIn, kernel_task);
+        if (!d) continue;
+        if (d->prepare() != kIOReturnSuccess) { LOG("DMATEST: cannot wire the low buffer"); d->release(); continue; }      // the storage stack panics on a descriptor that is not wired
+        LOG("DMATEST: reading the same block into LOW phys 0x%llx (chunk %d) ...", (unsigned long long)chunkPhys(b), i);
+        IOSleep(dmaScanBelow ? 300 : 2000);
+        actual = 0;
+        r = media->read(this, 0, d, nullptr, &actual);
+        bool same = memcmp(va, want, len) == 0, untouched = true;
+        for (uint32_t k = 0; k < len; k++) if (va[k] != 0xa5) { untouched = false; break; }
+        LOG("DMATEST: LOW phys 0x%llx: result 0x%x, %llu bytes, data %s", (unsigned long long)chunkPhys(b), r, (unsigned long long)actual,
+            same ? "MATCHES the control (DMA works here)" : untouched ? "NOT WRITTEN (buffer still holds the fill pattern)" : "DIFFERENT from the control");
+        d->complete();
+        d->release();
+        if (r != kIOReturnSuccess) break;
+    }
+    LOG("DMATEST: done");
+    media->close(this);
+    media->release();
+    ctl->release();
 }
 
 void PS5Bus20Watch::stop(IOService *provider)

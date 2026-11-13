@@ -24,6 +24,8 @@
 		<dict>
 			<key>CFBundleIdentifier</key>
 			<string>local.ps5.driver.PS5Bus20Watch</string>
+			<key>DmaTest</key>
+			<integer>0</integer>
 			<key>IOClass</key>
 			<string>PS5Bus20Watch</string>
 			<key>IOMatchCategory</key>
@@ -40,6 +42,8 @@
 	<dict>
 		<key>com.apple.iokit.IOPCIFamily</key>
 		<string>2.9</string>
+		<key>com.apple.iokit.IOStorageFamily</key>
+		<string>1.6</string>
 		<key>com.apple.kpi.bsd</key>
 		<string>8.0.0</string>
 		<key>com.apple.kpi.iokit</key>
